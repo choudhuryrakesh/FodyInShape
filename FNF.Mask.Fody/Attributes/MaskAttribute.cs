@@ -1,24 +1,21 @@
-﻿using System;
+﻿using FNF.ILWeaver.Infrastructure.Models;
+using System;
 
-namespace FNF.Mask.Fody.Attributes
+namespace FNF.ILWeaver.Attributes
 {
-    [AttributeUsage(AttributeTargets.Property)]
-    public abstract class MaskAttribute : Attribute
+    [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
+    public abstract class MaskAttribute : ProtectorAttribute
     {
-        protected const char DefaultReplaceChar = '#';
+        internal MaskPattern Pattern { get; }
 
-        internal string MatchPattern { get; }
-        internal string ReplacePattern { get; }
-
-        public MaskAttribute()
+        protected MaskAttribute()
         {
-            MatchPattern = ReplacePattern = string.Empty;
+            Pattern = new MaskPattern(string.Empty, string.Empty);
         }
 
-        public MaskAttribute(string MatchPattern, string ReplacePattern)
+        protected MaskAttribute(string matchPattern, string replacePattern) : this()
         {
-            this.MatchPattern = MatchPattern;
-            this.ReplacePattern = ReplacePattern;
+            Pattern = new MaskPattern(matchPattern, replacePattern);
         }
     }
 }

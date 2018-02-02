@@ -1,50 +1,65 @@
-﻿using FNF.Mask.Fody.Attributes;
-using FNF.Mask.Fody.Infrastructure.Extensions;
-using FNF.Mask.Fody.Maskers;
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using System;
-using System.Diagnostics;
 using System.Linq;
 
-namespace FNF.Mask.Fody
+namespace FNF.ILWeaver.Fody
 {
+    using Attributes;
+    using Infrastructure;
+    using Infrastructure.Extensions;
+    using Processors;
+    using PropertyDefPredicate = Func<PropertyDefinition, bool>;
+
     public class ModuleWeaver
     {
-        private readonly Func<PropertyDefinition, bool> _isAnyMaskAttributes;
-        private readonly Func<CustomAttribute, bool> _isMaskerAttribute;
+        private readonly PropertyDefPredicate _isAnyProtectorAttributes;
 
         public ModuleDefinition ModuleDefinition { get; set; }
 
         public ModuleWeaver()
         {
-            _isMaskerAttribute = a => a.AttributeType.Namespace == typeof(MaskAttribute).Namespace; // ToDo:
-            _isAnyMaskAttributes = (p) => p.CustomAttributes.Any(_isMaskerAttribute);
+            _isAnyProtectorAttributes = (p) => p.CustomAttributes.Any(a => a.Is<ProtectorAttribute>());
         }
 
         public void Execute()
         {
             try
             {
-                foreach (var @class in ModuleDefinition.Types.Where(t => t.IsClass))
+                foreach (var @class in ModuleDefinition.GetAllClasses())
                 {
-                    var propertiesToMask = @class.Properties.Where(_isAnyMaskAttributes).ToList();
-                    foreach (var property in propertiesToMask)
-                    {
-                        var maskAttributes = property.CustomAttributes.Where(_isMaskerAttribute);
-                        foreach (var customAttribute in maskAttributes)
-                        {
-                            var masker = Masker.For(module: ModuleDefinition, attribute: customAttribute.CastTo<MaskAttribute>());
-                            masker.Process(property: property, inClass: @class);
-                        }
-                    }
+                    ProtectClass(@class);
+                    ProtectMembers(@class);
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"FNF.Mask.Fody: Exception occured {Environment.NewLine} {ex.Message}");
-                //ex.ToFriendlyString();
-                //throw new WeavingException();
-                throw ex;
+                ExceptionHandler.Handle(ex);
+            }
+        }
+
+        private void ProtectClass(TypeDefinition @class)
+        {
+            if (!@class.HaveAttribute<ProtectorAttribute>()) return;
+
+            var protectAttributes = @class.GetAttributes<ProtectorAttribute>();
+            foreach (var protectAttrib in protectAttributes)
+            {
+                var processor = Processor.ForClass(ModuleDefinition, @class, protectAttrib.CastTo<ProtectorAttribute>());
+                processor.Process();
+            }
+        }
+
+        private void ProtectMembers(TypeDefinition @class)
+        {
+            var propertiesToMask = @class.Properties.Where(_isAnyProtectorAttributes).ToList();
+            foreach (var property in propertiesToMask)
+            {
+                var protectAttributes = property.CustomAttributes.Where(a => a.Is<ProtectorAttribute>());
+                foreach (var protectAttrib in protectAttributes)
+                {
+                    var processor = Processor.ForProperty(ModuleDefinition, @class, property, protectAttrib.CastTo<ProtectorAttribute>());
+                    processor.Process();
+                }
             }
         }
     }

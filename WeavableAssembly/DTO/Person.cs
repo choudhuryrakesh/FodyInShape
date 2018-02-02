@@ -1,8 +1,10 @@
 ﻿using FNF.Mask.Fody.Attributes;
 using Newtonsoft.Json;
+using System.Runtime.Serialization;
 
 namespace WeavableAssembly.DTO
 {
+    [DataContract]
     public class Person
     {
         [MaskSSN]

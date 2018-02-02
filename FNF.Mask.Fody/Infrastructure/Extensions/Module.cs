@@ -1,14 +1,17 @@
-﻿using Mono.Cecil;
+﻿using FNF.ILWeaver.Infrastructure.Models;
+using Mono.Cecil;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using Reflection = System.Reflection;
 
-namespace FNF.Mask.Fody.Infrastructure.Extensions
+namespace FNF.ILWeaver.Infrastructure.Extensions
 {
+    using ParameterPredicate = Func<Reflection.ParameterInfo[], bool>;
+
     internal static class Module
     {
-        public static CustomAttribute CreateCustomAttribute<T>(this ModuleDefinition module, IEnumerable<NamedArg> namedArgs = null)
+        public static CustomAttribute CreateCustomAttribute<T>(this ModuleDefinition module, IEnumerable<AttributeArgument> namedArgs = null)
         {
             var attributeCtor = module.ImportReference(typeof(T).GetConstructor(Type.EmptyTypes));
             var customAttribute = new CustomAttribute(attributeCtor);
@@ -24,17 +27,40 @@ namespace FNF.Mask.Fody.Infrastructure.Extensions
         }
 
         public static MethodReference GetMethodReference<TFrom>(this ModuleDefinition module,
-            string methodName, Func<Reflection.ParameterInfo[], bool> singlePredicate)
+            string methodName, ParameterPredicate singlePredicate = null)
         {
             return module.GetMethodReference(typeof(TFrom), methodName, singlePredicate);
         }
 
         public static MethodReference GetMethodReference(this ModuleDefinition module, Type from,
-            string methodName, Func<Reflection.ParameterInfo[], bool> singlePredicate)
+            string methodName, ParameterPredicate singlePredicate = null)
         {
             var method = from.GetMethods()
               .Where(m => m.Name == methodName)
-              .Single(m => singlePredicate(m.GetParameters()));
+              .Single(m => singlePredicate == null || singlePredicate(m.GetParameters()));
+
+            return module.ImportReference(method);
+        }
+
+        public static MethodReference GetMethodReference(this ModuleDefinition module, MethodInfo methodInfo)
+        {
+            return module.GetType(methodInfo.ClassFullName)
+                .Methods
+                .Single(m => !m.IsConstructor && m.Name == methodInfo.MethodName && m.Parameters.Count == 0);
+        }
+
+        public static MethodReference GetCtorReference(this ModuleDefinition module, MethodInfo methodInfo)
+        {
+            return module.GetType(methodInfo.ClassFullName)
+                .Methods
+                .Single(m => m.IsConstructor && m.Parameters.Count == 0);
+        }
+
+        public static MethodReference GetCtorReference<TFrom>(this ModuleDefinition module,
+          ParameterPredicate singlePredicate = null)
+        {
+            var method = typeof(TFrom).GetConstructors()
+              .Single(m => singlePredicate == null || singlePredicate(m.GetParameters()));
 
             return module.ImportReference(method);
         }
@@ -45,21 +71,6 @@ namespace FNF.Mask.Fody.Infrastructure.Extensions
                 .Where(f => f.Name == fieldName).Single();
 
             return module.ImportReference(field);
-        }
-    }
-
-    internal class NamedArg
-    {
-        public string Name { get; }
-        public TypeReference Type { get; }
-
-        public object Value { get; }
-
-        public NamedArg(string name, TypeReference type, object value)
-        {
-            Name = name;
-            Type = type;
-            Value = value;
         }
     }
 }
